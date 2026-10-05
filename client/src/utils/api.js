@@ -1,6 +1,19 @@
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
+async function readJsonResponse(response) {
+  const body = await response.text();
+  if (!body.trim()) {
+    throw new Error(`The API returned an empty response (HTTP ${response.status}). Check that the API is running and that its URL is configured correctly.`);
+  }
+
+  try {
+    return JSON.parse(body);
+  } catch {
+    throw new Error(`The API returned an invalid response (HTTP ${response.status}). Check that the API URL points to the LifeFlow API.`);
+  }
+}
+
 async function request(endpoint, options = {}) {
   const token = localStorage.getItem('token');
   const config = {
@@ -26,7 +39,14 @@ async function request(endpoint, options = {}) {
         },
         body: JSON.stringify({ refreshToken }),
       });
-      const refreshData = await refreshed.json();
+      let refreshData;
+      try {
+        refreshData = await readJsonResponse(refreshed);
+      } catch {
+        localStorage.removeItem('token');
+        localStorage.removeItem('refreshToken');
+        throw new Error('Your session could not be refreshed. Please sign in again.');
+      }
       if (refreshed.ok && refreshData.success) {
         localStorage.setItem('token', refreshData.data.token);
         localStorage.setItem('refreshToken', refreshData.data.refreshToken);
@@ -38,7 +58,7 @@ async function request(endpoint, options = {}) {
     }
   }
 
-  const data = await res.json();
+  const data = await readJsonResponse(res);
   
   if (!res.ok) {
     throw new Error(data.error || 'Something went wrong');
