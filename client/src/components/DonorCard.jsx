@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { MapPin, Phone, CheckCircle, XCircle } from 'lucide-react';
 import { displayBloodGroup } from '../utils/bloodGroups';
 
@@ -68,12 +69,12 @@ export default function DonorCard({ donor }) {
               To protect donor privacy and prevent spam, contact details are shared when an active emergency request matches donor availability.
             </p>
             <div className="space-y-3">
-              <a
-                href="/request-blood"
+              <Link
+                to="/request-blood"
                 className="btn-primary w-full text-center block text-sm"
               >
                 Create Emergency Request
-              </a>
+              </Link>
               <button
                 onClick={() => setShowModal(false)}
                 className="w-full text-center text-sm font-semibold text-slate-500 hover:text-slate-800 py-2"
