@@ -28,10 +28,17 @@ export function AuthProvider({ children }) {
     loadUser();
   }, [token]);
 
+  useEffect(() => {
+    const syncRefreshedToken = () => setToken(localStorage.getItem('token'));
+    window.addEventListener('auth-token-refreshed', syncRefreshedToken);
+    return () => window.removeEventListener('auth-token-refreshed', syncRefreshedToken);
+  }, []);
+
   const login = async (email, password) => {
     const res = await api.login({ email, password });
     if (res.success) {
       localStorage.setItem('token', res.data.token);
+      if (res.data.refreshToken) localStorage.setItem('refreshToken', res.data.refreshToken);
       setToken(res.data.token);
       setUser(res.data.user);
       return res.data.user;
@@ -43,6 +50,7 @@ export function AuthProvider({ children }) {
     const res = await api.register(userData);
     if (res.success) {
       localStorage.setItem('token', res.data.token);
+      if (res.data.refreshToken) localStorage.setItem('refreshToken', res.data.refreshToken);
       setToken(res.data.token);
       setUser(res.data.user);
       return res.data.user;
@@ -52,6 +60,7 @@ export function AuthProvider({ children }) {
 
   const logout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
     setToken(null);
     setUser(null);
   };

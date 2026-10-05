@@ -41,11 +41,14 @@ database; the static client by itself cannot provide those features.
 ## Deploy
 
 GitHub Actions builds `client/` and publishes `client/dist` to GitHub Pages on
-every push to `main`. In the repository settings, enable **Pages** with
-**GitHub Actions** as the build and deployment source. Set the repository
-Actions variable `API_BASE_URL` to the public origin of a separately deployed
-API (for example, `https://api.example.com`, without a trailing slash). The API
-needs a persistent database and a `JWT_SECRET`; SQLite files on ephemeral
-hosting are not suitable for production. GitHub Pages only hosts the client,
-so the server must be deployed to an API host for login, donor search, and
-requests to work on the published site.
+every push to `main`. The workflow is connected to the LifeFlow Edge Function
+and passes its API URL and browser-safe Supabase publishable key to the client
+build. Optional repository Actions variables named `API_BASE_URL` and
+`SUPABASE_PUBLISHABLE_KEY` override the defaults in the workflow.
+
+The hosted API and Postgres database are in the `lifeflow-blood-donation`
+Supabase project (India region). Its Edge Function implements registration,
+login, donor search and availability, blood requests, pledges, and live stats.
+Database tables have row-level security enabled and are accessible only through
+the server-side function. The local Express API remains available for
+development using the SQLite setup above.

@@ -1,10 +1,12 @@
-const API_BASE = `${(import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')}/api`;
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
+const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 async function request(endpoint, options = {}) {
   const token = localStorage.getItem('token');
   const config = {
     headers: {
       'Content-Type': 'application/json',
+      ...(SUPABASE_PUBLISHABLE_KEY && { apikey: SUPABASE_PUBLISHABLE_KEY }),
       ...(token && { Authorization: `Bearer ${token}` }),
       ...options.headers,
     },
@@ -12,6 +14,30 @@ async function request(endpoint, options = {}) {
   };
 
   const res = await fetch(`${API_BASE}${endpoint}`, config);
+  const canRefresh = !['/auth/login', '/auth/register', '/auth/refresh'].includes(endpoint);
+  if (res.status === 401 && canRefresh && !options._retried) {
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (refreshToken) {
+      const refreshed = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(SUPABASE_PUBLISHABLE_KEY && { apikey: SUPABASE_PUBLISHABLE_KEY }),
+        },
+        body: JSON.stringify({ refreshToken }),
+      });
+      const refreshData = await refreshed.json();
+      if (refreshed.ok && refreshData.success) {
+        localStorage.setItem('token', refreshData.data.token);
+        localStorage.setItem('refreshToken', refreshData.data.refreshToken);
+        window.dispatchEvent(new Event('auth-token-refreshed'));
+        return request(endpoint, { ...options, _retried: true });
+      }
+      localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
+    }
+  }
+
   const data = await res.json();
   
   if (!res.ok) {
