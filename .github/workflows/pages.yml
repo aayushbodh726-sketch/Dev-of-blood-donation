@@ -30,11 +30,23 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install dependencies
-        run: npm install
-
-      - name: Build client
-        run: npm run build
+      - name: Install dependencies and build
+        run: |
+          if [ -d "client" ] && [ -f "client/package.json" ]; then
+            echo "Building from client directory..."
+            cd client
+            npm install
+            npm run build
+            cd ..
+            mkdir -p public_dist
+            cp -r client/dist/* public_dist/
+          else
+            echo "Building from root directory..."
+            npm install
+            npm run build
+            mkdir -p public_dist
+            cp -r dist/* public_dist/
+          fi
         env:
           VITE_API_BASE_URL: ${{ env.API_BASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ env.SUPABASE_PUBLISHABLE_KEY }}
@@ -45,7 +57,7 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: public_dist
 
   deploy:
     environment:
