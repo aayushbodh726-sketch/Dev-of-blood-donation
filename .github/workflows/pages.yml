@@ -33,19 +33,21 @@ jobs:
       - name: Install dependencies and build
         run: |
           if [ -d "client" ] && [ -f "client/package.json" ]; then
-            echo "Building from client directory..."
+            echo "Building from client directory with base=./ ..."
             cd client
             npm install
-            npm run build
+            npm run build -- --base=./
             cd ..
             mkdir -p public_dist
             cp -r client/dist/* public_dist/
+            cp public_dist/index.html public_dist/404.html
           else
-            echo "Building from root directory..."
+            echo "Building from root directory with base=./ ..."
             npm install
-            npm run build
+            npm run build -- --base=./
             mkdir -p public_dist
             cp -r dist/* public_dist/
+            cp public_dist/index.html public_dist/404.html
           fi
         env:
           VITE_API_BASE_URL: ${{ env.API_BASE_URL }}
