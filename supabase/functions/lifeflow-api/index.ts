@@ -257,7 +257,7 @@ async function handle(req: Request, admin: any) {
   }
 
   if (method === 'POST' && path === '/requests') {
-    const { user, profile } = await currentUser(req)
+    const { user, profile } = await currentUser(req, admin)
     if (!user || !profile) return failure('Access denied. No valid token provided.', 401)
     const body = await req.json()
     if (!validRequest(body)) return failure('Invalid blood request details', 400)
