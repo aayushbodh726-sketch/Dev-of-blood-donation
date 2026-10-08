@@ -1,4 +1,4 @@
-name: Deploy website to GitHub Pages
+name: Deploy LifeFlow to GitHub Pages
 
 on:
   push:
@@ -15,6 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  # Override via repo Settings → Secrets and variables → Actions → Variables
   API_BASE_URL: ${{ vars.API_BASE_URL || 'https://ambpqrztnvgthgrmqbse.supabase.co/functions/v1/lifeflow-api' }}
   SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_uXobz_BlIXYQECoftPsqCA_TUC2H82J' }}
 
@@ -22,51 +23,48 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
 
-      - name: Install dependencies and build
-        run: |
-          if [ -d "client" ] && [ -f "client/package.json" ]; then
-            echo "Building from client directory with base=./ ..."
-            cd client
-            npm install
-            npm run build -- --base=./
-            cd ..
-            mkdir -p public_dist
-            cp -r client/dist/* public_dist/
-            cp public_dist/index.html public_dist/404.html
-          else
-            echo "Building from root directory with base=./ ..."
-            npm install
-            npm run build -- --base=./
-            mkdir -p public_dist
-            cp -r dist/* public_dist/
-            cp public_dist/index.html public_dist/404.html
-          fi
+      - name: Install and build client
+        working-directory: client
         env:
           VITE_API_BASE_URL: ${{ env.API_BASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ env.SUPABASE_PUBLISHABLE_KEY }}
+          # Must match the GitHub Pages project URL path
+          VITE_BASE_PATH: /Dev-of-blood-donation/
+        run: |
+          npm ci
+          npm run build
+          # SPA fallback for direct links (HashRouter is primary, but keep this)
+          cp dist/index.html dist/404.html
+          # Sanity check: never deploy without the app entry
+          test -f dist/index.html
+          test -d dist/assets
+          echo "Built files:"
+          ls -la dist/
 
-      - name: Configure Pages
+      - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload Pages artifact
+      - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: public_dist
+          path: client/dist
 
   deploy:
+    needs: build
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
