@@ -3,6 +3,9 @@ import { supabase } from './supabase';
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
+/** Production site root (GitHub Pages). Email links must point here, not localhost. */
+const PRODUCTION_SITE_URL = 'https://aayushbodh726-sketch.github.io/Dev-of-blood-donation/';
+
 async function readJsonResponse(response) {
   const body = await response.text();
   if (!body.trim()) {
@@ -78,11 +81,19 @@ async function request(endpoint, options = {}) {
   return data;
 }
 
-/** Build the URL users land on after clicking the reset link in email. */
+/**
+ * URL Supabase should open after the user clicks the reset link in email.
+ * Uses the live GitHub Pages site (not localhost) so links work without a local dev server.
+ * Tokens arrive as #access_token=...; main.jsx captures them and routes to #/reset-password.
+ */
 export function getPasswordResetRedirectUrl() {
-  const origin = window.location.origin;
-  const base = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
-  return `${origin}${base}/#/reset-password`;
+  const host = window.location.hostname;
+  const isLocal = host === 'localhost' || host === '127.0.0.1';
+  if (isLocal) {
+    // Local testing only — requires `npm run dev` running on this port
+    return `${window.location.origin}/`;
+  }
+  return PRODUCTION_SITE_URL;
 }
 
 /**
