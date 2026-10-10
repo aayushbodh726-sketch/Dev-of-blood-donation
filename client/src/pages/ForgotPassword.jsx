@@ -1,13 +1,46 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Droplet, Mail, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Droplet, Mail, ArrowLeft, CheckCircle2, Clock } from 'lucide-react';
 import { api, getPasswordResetRedirectUrl } from '../utils/api';
+
+const COOLDOWN_KEY = 'lifeflow_reset_cooldown_until';
+const COOLDOWN_MS = 60 * 1000; // 60s client-side pause after each send
+
+function getRemainingSeconds() {
+  try {
+    const until = Number(localStorage.getItem(COOLDOWN_KEY) || 0);
+    return Math.max(0, Math.ceil((until - Date.now()) / 1000));
+  } catch {
+    return 0;
+  }
+}
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [sent, setSent] = useState(false);
+  const [cooldown, setCooldown] = useState(getRemainingSeconds);
+
+  useEffect(() => {
+    if (cooldown <= 0) return undefined;
+    const id = setInterval(() => {
+      const left = getRemainingSeconds();
+      setCooldown(left);
+      if (left <= 0) clearInterval(id);
+    }, 500);
+    return () => clearInterval(id);
+  }, [cooldown]);
+
+  const startCooldown = () => {
+    const until = Date.now() + COOLDOWN_MS;
+    try {
+      localStorage.setItem(COOLDOWN_KEY, String(until));
+    } catch {
+      /* ignore */
+    }
+    setCooldown(Math.ceil(COOLDOWN_MS / 1000));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -15,14 +48,28 @@ export default function ForgotPassword() {
       setError('Please enter your email address');
       return;
     }
+    if (cooldown > 0) {
+      setError(`Please wait ${cooldown}s before requesting another reset email.`);
+      return;
+    }
 
     setSubmitting(true);
     setError('');
     try {
       await api.forgotPassword(email.trim(), getPasswordResetRedirectUrl());
+      startCooldown();
       setSent(true);
     } catch (err) {
-      setError(err.message || 'Could not send reset email. Please try again.');
+      const msg = err.message || 'Could not send reset email. Please try again.';
+      // Supabase rate limit — ask user to wait longer
+      if (/rate|limit|too many/i.test(msg)) {
+        startCooldown();
+        setError(
+          'Too many reset emails were requested. Please wait about 15 minutes, check your inbox/spam for an earlier email, then try again.'
+        );
+      } else {
+        setError(msg);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -54,21 +101,31 @@ export default function ForgotPassword() {
               </div>
               <h3 className="text-lg font-bold text-slate-900">Check your email</h3>
               <p className="text-sm text-slate-600 leading-relaxed">
-                If an account exists for <span className="font-semibold text-slate-800">{email.trim()}</span>,
-                we sent a password reset link. Open the email and follow the link to choose a new password.
+                If an account exists for{' '}
+                <span className="font-semibold text-slate-800">{email.trim()}</span>, we sent a
+                password reset link. Open the email and follow the link to choose a new password.
               </p>
               <p className="text-xs text-slate-500">
-                Did not receive it? Check spam/junk, wait a minute, then try again.
+                Did not receive it? Check spam/junk. Avoid clicking Send repeatedly — that triggers a
+                temporary block.
               </p>
               <button
                 type="button"
+                disabled={cooldown > 0}
                 onClick={() => {
                   setSent(false);
                   setError('');
                 }}
-                className="btn-secondary w-full py-3 text-sm mt-2"
+                className="btn-secondary w-full py-3 text-sm mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Resend link
+                {cooldown > 0 ? (
+                  <span className="inline-flex items-center gap-2 justify-center">
+                    <Clock className="w-4 h-4" />
+                    Resend available in {cooldown}s
+                  </span>
+                ) : (
+                  'Resend link'
+                )}
               </button>
               <Link to="/login" className="block text-sm font-semibold text-crimson-700 hover:underline pt-2">
                 Back to Sign In
@@ -101,10 +158,14 @@ export default function ForgotPassword() {
 
                 <button
                   type="submit"
-                  disabled={submitting}
-                  className="btn-primary w-full py-3.5 text-base shadow-lg shadow-crimson-700/20"
+                  disabled={submitting || cooldown > 0}
+                  className="btn-primary w-full py-3.5 text-base shadow-lg shadow-crimson-700/20 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {submitting ? 'Sending reset link...' : 'Send Reset Link'}
+                  {submitting
+                    ? 'Sending reset link...'
+                    : cooldown > 0
+                      ? `Wait ${cooldown}s to try again`
+                      : 'Send Reset Link'}
                 </button>
               </form>
 
