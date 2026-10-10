@@ -17,7 +17,7 @@ const bloodGroups = new Set(['A_POS', 'A_NEG', 'B_POS', 'B_NEG', 'AB_POS', 'AB_N
 const roles = new Set(['DONOR', 'RECIPIENT'])
 const urgencies = new Set(['CRITICAL', 'HIGH', 'NORMAL'])
 
-const DEFAULT_RESET_REDIRECT = 'https://aayushbodh726-sketch.github.io/Dev-of-blood-donation/#/reset-password'
+const DEFAULT_RESET_REDIRECT = 'https://aayushbodh726-sketch.github.io/Dev-of-blood-donation/'
 
 function mapUser(user: Record<string, any>) {
   return {
@@ -86,6 +86,43 @@ async function currentUser(req: Request, admin: any) {
     .from('app_users').select('*').eq('auth_user_id', data.user.id).maybeSingle()
   if (profileError) throw profileError
   return { user: data.user, profile }
+}
+
+/** Password grant via Auth HTTP API — more reliable than admin.auth.signInWithPassword in Edge. */
+async function passwordGrant(email: string, password: string) {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') || ''
+  const anonKey =
+    Deno.env.get('SUPABASE_ANON_KEY') ||
+    Deno.env.get('SUPABASE_PUBLISHABLE_KEY') ||
+    Deno.env.get('SB_PUBLISHABLE_KEY') ||
+    ''
+  if (!supabaseUrl || !anonKey) {
+    return { session: null, error: 'Auth is not configured on the server' }
+  }
+  const res = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: anonKey,
+      Authorization: `Bearer ${anonKey}`,
+    },
+    body: JSON.stringify({ email, password }),
+  })
+  const payload = await res.json().catch(() => ({}))
+  if (!res.ok || !payload.access_token) {
+    return {
+      session: null,
+      error: payload.error_description || payload.msg || payload.error || 'Invalid email or password',
+    }
+  }
+  return {
+    session: {
+      access_token: payload.access_token,
+      refresh_token: payload.refresh_token,
+      user: payload.user,
+    },
+    error: null,
+  }
 }
 
 function validRegister(body: Record<string, any>) {
@@ -193,19 +230,24 @@ async function handle(req: Request, admin: any) {
       return failure('Could not create account profile', 500)
     }
 
-    const { data: session, error: sessionError } = await admin.auth.signInWithPassword({ email, password: body.password })
-    if (sessionError || !session.session) return failure('Account created, but sign-in failed. Please log in.', 500)
-    return json({ success: true, data: { token: session.session.access_token, refreshToken: session.session.refresh_token, user: mapUser(profile) } }, 201)
+    const { session, error: sessionError } = await passwordGrant(email, body.password)
+    if (sessionError || !session) {
+      return failure('Account created, but sign-in failed. Please log in.', 500)
+    }
+    return json({ success: true, data: { token: session.access_token, refreshToken: session.refresh_token, user: mapUser(profile) } }, 201)
   }
 
   if (method === 'POST' && path === '/auth/login') {
     const body = await req.json()
     if (typeof body.email !== 'string' || typeof body.password !== 'string') return failure('Invalid email or password', 400)
-    const { data, error } = await admin.auth.signInWithPassword({ email: body.email.trim().toLowerCase(), password: body.password })
-    if (error || !data.user || !data.session) return failure('Invalid email or password', 401)
-    const { data: profile, error: profileError } = await admin.from('app_users').select('*').eq('auth_user_id', data.user.id).maybeSingle()
+    const email = body.email.trim().toLowerCase()
+    const { session, error } = await passwordGrant(email, body.password)
+    if (error || !session) return failure('Invalid email or password', 401)
+    const userId = session.user?.id
+    if (!userId) return failure('Invalid email or password', 401)
+    const { data: profile, error: profileError } = await admin.from('app_users').select('*').eq('auth_user_id', userId).maybeSingle()
     if (profileError || !profile) return failure('Invalid email or password', 401)
-    return json({ success: true, data: { token: data.session.access_token, refreshToken: data.session.refresh_token, user: mapUser(profile) } })
+    return json({ success: true, data: { token: session.access_token, refreshToken: session.refresh_token, user: mapUser(profile) } })
   }
 
   if (method === 'POST' && path === '/auth/refresh') {
@@ -218,7 +260,6 @@ async function handle(req: Request, admin: any) {
     return json({ success: true, data: { token: data.session.access_token, refreshToken: data.session.refresh_token, user: mapUser(profile) } })
   }
 
-  // Request a password-reset email (always returns the same success message for privacy)
   if (method === 'POST' && path === '/auth/forgot-password') {
     const body = await req.json().catch(() => ({}))
     const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
@@ -229,13 +270,11 @@ async function handle(req: Request, admin: any) {
     let redirectTo = typeof body.redirectTo === 'string' ? body.redirectTo.trim() : DEFAULT_RESET_REDIRECT
     if (!isSafeRedirect(redirectTo)) redirectTo = DEFAULT_RESET_REDIRECT
 
-    // Only attempt send when the email is registered; still return a generic success response.
     const { data: profile } = await admin.from('app_users').select('auth_user_id').eq('email', email).maybeSingle()
     if (profile) {
       const { error } = await admin.auth.resetPasswordForEmail(email, { redirectTo })
       if (error) {
         console.error('resetPasswordForEmail failed', error)
-        // Fall back to generating a recovery link (email may still be sent by Supabase templates)
         const { error: linkError } = await admin.auth.admin.generateLink({
           type: 'recovery',
           email,
@@ -254,7 +293,6 @@ async function handle(req: Request, admin: any) {
     })
   }
 
-  // Set a new password using the recovery access token from the email link
   if (method === 'POST' && path === '/auth/reset-password') {
     const body = await req.json().catch(() => ({}))
     const password = typeof body.password === 'string' ? body.password : ''

@@ -46,27 +46,18 @@ async function request(endpoint, options = {}) {
   if (res.status === 401 && canRefresh && !options._retried) {
     const refreshToken = localStorage.getItem('refreshToken');
     if (refreshToken) {
-      const refreshed = await fetch(`${API_BASE}/auth/refresh`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(SUPABASE_PUBLISHABLE_KEY && { apikey: SUPABASE_PUBLISHABLE_KEY }),
-        },
-        body: JSON.stringify({ refreshToken }),
-      });
-      let refreshData;
       try {
-        refreshData = await readJsonResponse(refreshed);
+        const refreshed = await refreshSession(refreshToken);
+        if (refreshed?.token) {
+          localStorage.setItem('token', refreshed.token);
+          localStorage.setItem('refreshToken', refreshed.refreshToken);
+          window.dispatchEvent(new Event('auth-token-refreshed'));
+          return request(endpoint, { ...options, _retried: true });
+        }
       } catch {
         localStorage.removeItem('token');
         localStorage.removeItem('refreshToken');
         throw new Error('Your session could not be refreshed. Please sign in again.');
-      }
-      if (refreshed.ok && refreshData.success) {
-        localStorage.setItem('token', refreshData.data.token);
-        localStorage.setItem('refreshToken', refreshData.data.refreshToken);
-        window.dispatchEvent(new Event('auth-token-refreshed'));
-        return request(endpoint, { ...options, _retried: true });
       }
       localStorage.removeItem('token');
       localStorage.removeItem('refreshToken');
@@ -81,25 +72,44 @@ async function request(endpoint, options = {}) {
   return data;
 }
 
-/**
- * URL Supabase should open after the user clicks the reset link in email.
- * Uses the live GitHub Pages site (not localhost) so links work without a local dev server.
- * Tokens arrive as #access_token=...; main.jsx captures them and routes to #/reset-password.
- */
+/** Refresh using Supabase Auth (reliable) with API fallback. */
+async function refreshSession(refreshToken) {
+  if (supabase) {
+    const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
+    if (!error && data.session) {
+      return {
+        token: data.session.access_token,
+        refreshToken: data.session.refresh_token,
+      };
+    }
+  }
+  const refreshed = await fetch(`${API_BASE}/auth/refresh`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(SUPABASE_PUBLISHABLE_KEY && { apikey: SUPABASE_PUBLISHABLE_KEY }),
+    },
+    body: JSON.stringify({ refreshToken }),
+  });
+  const refreshData = await readJsonResponse(refreshed);
+  if (refreshed.ok && refreshData.success) {
+    return {
+      token: refreshData.data.token,
+      refreshToken: refreshData.data.refreshToken,
+    };
+  }
+  return null;
+}
+
 export function getPasswordResetRedirectUrl() {
   const host = window.location.hostname;
   const isLocal = host === 'localhost' || host === '127.0.0.1';
   if (isLocal) {
-    // Local testing only — requires `npm run dev` running on this port
     return `${window.location.origin}/`;
   }
   return PRODUCTION_SITE_URL;
 }
 
-/**
- * Parse recovery tokens from the URL after Supabase redirects the user.
- * Supports hash fragments and query strings (HashRouter-friendly).
- */
 export function extractRecoveryTokensFromUrl() {
   const href = window.location.href;
   const hash = window.location.hash || '';
@@ -132,8 +142,41 @@ export function extractRecoveryTokensFromUrl() {
 }
 
 /**
- * Request a password-reset email via Supabase Auth (works without Edge Function deploy).
+ * Login via Supabase Auth (the Edge Function signInWithPassword path is unreliable).
+ * Then load the LifeFlow profile from /auth/me.
  */
+async function login(body) {
+  const email = String(body.email || '').trim().toLowerCase();
+  const password = String(body.password || '');
+  if (!email || !password) {
+    throw new Error('Invalid email or password');
+  }
+
+  if (supabase) {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error || !data.session) {
+      throw new Error('Invalid email or password');
+    }
+    const me = await request('/auth/me', { accessToken: data.session.access_token });
+    // Clear supabase client session so we only use our own token storage
+    try {
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch {
+      /* ignore */
+    }
+    return {
+      success: true,
+      data: {
+        token: data.session.access_token,
+        refreshToken: data.session.refresh_token,
+        user: me.data,
+      },
+    };
+  }
+
+  return request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+}
+
 async function forgotPassword(email, redirectTo) {
   const target = redirectTo || getPasswordResetRedirectUrl();
   if (supabase) {
@@ -160,9 +203,6 @@ async function forgotPassword(email, redirectTo) {
   });
 }
 
-/**
- * Set a new password using the recovery access token from the email link.
- */
 async function resetPassword(password, accessToken, refreshToken = '') {
   if (password.length < 6) {
     throw new Error('Password must be at least 6 characters');
@@ -192,7 +232,7 @@ async function resetPassword(password, accessToken, refreshToken = '') {
     if (error) {
       throw new Error(error.message || 'Could not update password');
     }
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: 'local' });
     return {
       success: true,
       message: 'Your password has been updated. You can now sign in with your new password.',
@@ -208,7 +248,7 @@ async function resetPassword(password, accessToken, refreshToken = '') {
 
 export const api = {
   register: (body) => request('/auth/register', { method: 'POST', body: JSON.stringify(body) }),
-  login: (body) => request('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
+  login,
   getMe: () => request('/auth/me'),
   forgotPassword,
   resetPassword,
