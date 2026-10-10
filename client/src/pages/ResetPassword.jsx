@@ -17,14 +17,16 @@ export default function ResetPassword() {
   const [linkInvalid, setLinkInvalid] = useState(false);
 
   useEffect(() => {
-    // Prefer tokens from the current URL (email link), then sessionStorage fallback
     const fromUrl = extractRecoveryTokensFromUrl();
     if (fromUrl?.accessToken) {
       sessionStorage.setItem(RECOVERY_TOKEN_KEY, fromUrl.accessToken);
       setAccessToken(fromUrl.accessToken);
-      // Clean the ugly token fragment from the address bar while staying on this route
       if (window.location.hash.includes('access_token') || window.location.search.includes('access_token')) {
-        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search.split('&access_token')[0]}#/reset-password`);
+        window.history.replaceState(
+          null,
+          '',
+          `${window.location.pathname}${window.location.search.split('&access_token')[0]}#/reset-password`
+        );
       }
       return;
     }
