@@ -23,7 +23,7 @@ export default function Login() {
     setSubmitting(true);
     setError('');
     try {
-      await login(email, password);
+      await login(email.trim(), password);
       navigate('/');
     } catch (err) {
       setError(err.message || 'Invalid email or password');
@@ -68,6 +68,7 @@ export default function Login() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@example.com"
                   className="input-field pl-11"
+                  autoComplete="email"
                   required
                 />
               </div>
@@ -83,12 +84,14 @@ export default function Login() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   className="input-field pl-11 pr-11"
+                  autoComplete="current-password"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
@@ -105,11 +108,14 @@ export default function Login() {
             </button>
           </form>
 
-          {/* Quick Demo Credentials Tip */}
-          <div className="mt-6 pt-6 border-t border-slate-100 text-xs text-slate-500">
-            <p className="font-bold text-slate-700 mb-1">Demo Accounts (Password: password123):</p>
-            <p className="truncate">Donor: rahul.sharma@example.com</p>
-            <p className="truncate">Recipient: vikram.singh@example.com</p>
+          <div className="mt-6 pt-6 border-t border-slate-100 text-xs text-slate-500 text-center">
+            <p>
+              New here?{' '}
+              <Link to="/register" className="font-semibold text-crimson-700 hover:underline">
+                Create a free account
+              </Link>{' '}
+              to donate or request blood.
+            </p>
           </div>
         </div>
 

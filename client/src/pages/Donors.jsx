@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Search, Filter, RefreshCw, UserX } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Search, RefreshCw, UserX } from 'lucide-react';
 import { api } from '../utils/api';
 import { BLOOD_GROUP_OPTIONS } from '../utils/bloodGroups';
 import DonorCard from '../components/DonorCard';
@@ -9,17 +9,17 @@ export default function Donors() {
   const [donors, setDonors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  
+
   const [selectedBloodGroup, setSelectedBloodGroup] = useState('');
   const [cityFilter, setCityFilter] = useState('');
 
-  const fetchDonors = async () => {
+  const fetchDonors = useCallback(async (bloodGroup = selectedBloodGroup, city = cityFilter) => {
     setLoading(true);
     setError('');
     try {
       const res = await api.searchDonors({
-        bloodGroup: selectedBloodGroup,
-        city: cityFilter,
+        bloodGroup,
+        city,
       });
       if (res.success) {
         setDonors(res.data);
@@ -31,15 +31,21 @@ export default function Donors() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedBloodGroup, cityFilter]);
 
   useEffect(() => {
     fetchDonors();
-  }, []);
+  }, []); // initial load only
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    fetchDonors();
+    fetchDonors(selectedBloodGroup, cityFilter);
+  };
+
+  const handleClearFilters = () => {
+    setSelectedBloodGroup('');
+    setCityFilter('');
+    fetchDonors('', '');
   };
 
   return (
@@ -95,10 +101,7 @@ export default function Donors() {
               {(selectedBloodGroup || cityFilter) && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setSelectedBloodGroup('');
-                    setCityFilter('');
-                  }}
+                  onClick={handleClearFilters}
                   className="btn-secondary py-3 px-4"
                   title="Reset filters"
                 >
@@ -140,7 +143,7 @@ export default function Donors() {
         {error && (
           <div className="bg-red-50 text-red-700 p-6 rounded-2xl border border-red-200 text-center max-w-md mx-auto my-12">
             <p className="font-semibold">{error}</p>
-            <button onClick={fetchDonors} className="mt-4 btn-secondary py-2 px-4 text-sm">
+            <button onClick={() => fetchDonors()} className="mt-4 btn-secondary py-2 px-4 text-sm">
               Try Again
             </button>
           </div>
@@ -166,11 +169,7 @@ export default function Donors() {
               No available donors match your exact filter criteria. Try searching for a broader city or resetting filters.
             </p>
             <button
-              onClick={() => {
-                setSelectedBloodGroup('');
-                setCityFilter('');
-                fetchDonors();
-              }}
+              onClick={handleClearFilters}
               className="btn-secondary py-2.5 px-6 text-sm"
             >
               Clear Filters

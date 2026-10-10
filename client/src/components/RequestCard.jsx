@@ -15,7 +15,7 @@ function timeAgo(dateString) {
   return `${days}d ago`;
 }
 
-export default function RequestCard({ request, onPledge, showPledge = false, isDonor = false }) {
+export default function RequestCard({ request, onPledge, showPledge = false }) {
   const [pledging, setPledging] = useState(false);
   const [pledged, setPledged] = useState(false);
 
@@ -40,11 +40,13 @@ export default function RequestCard({ request, onPledge, showPledge = false, isD
   const currentUrgency = urgencyStyles[request.urgency] || urgencyStyles.NORMAL;
 
   const handlePledgeClick = async () => {
-    if (!onPledge || pledging) return;
+    if (!onPledge || pledging || pledged) return;
     setPledging(true);
     try {
-      await onPledge(request.id);
-      setPledged(true);
+      const success = await onPledge(request.id);
+      if (success) {
+        setPledged(true);
+      }
     } catch (err) {
       console.error(err);
     } finally {

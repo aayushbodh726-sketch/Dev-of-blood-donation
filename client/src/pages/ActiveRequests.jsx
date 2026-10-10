@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Heart, Activity, Inbox } from 'lucide-react';
+import { Inbox } from 'lucide-react';
 import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import RequestCard from '../components/RequestCard';
@@ -35,14 +35,15 @@ export default function ActiveRequests() {
     fetchRequests();
   }, []);
 
+  /** Returns true only when the pledge was recorded successfully. */
   const handlePledge = async (requestId) => {
     if (!isAuthenticated) {
       setToast({ message: 'Please log in as a donor to pledge blood', type: 'error' });
-      return;
+      return false;
     }
     if (user?.role !== 'DONOR') {
       setToast({ message: 'Only registered donors can pledge blood', type: 'error' });
-      return;
+      return false;
     }
 
     try {
@@ -50,11 +51,13 @@ export default function ActiveRequests() {
       if (res.success) {
         setToast({ message: 'Thank you! Your pledge has been recorded.', type: 'success' });
         fetchRequests();
-      } else {
-        setToast({ message: res.error || 'Could not record pledge', type: 'error' });
+        return true;
       }
+      setToast({ message: res.error || 'Could not record pledge', type: 'error' });
+      return false;
     } catch (err) {
       setToast({ message: err.message || 'Pledge failed', type: 'error' });
+      return false;
     }
   };
 
@@ -126,7 +129,6 @@ export default function ActiveRequests() {
                 request={req}
                 onPledge={handlePledge}
                 showPledge={isAuthenticated && user?.role === 'DONOR'}
-                isDonor={user?.role === 'DONOR'}
               />
             ))}
           </div>
