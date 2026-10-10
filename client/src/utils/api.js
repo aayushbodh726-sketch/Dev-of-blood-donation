@@ -14,8 +14,16 @@ async function readJsonResponse(response) {
   }
 }
 
+const NO_REFRESH_ENDPOINTS = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/refresh',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+];
+
 async function request(endpoint, options = {}) {
-  const token = localStorage.getItem('token');
+  const token = options.accessToken || localStorage.getItem('token');
   const config = {
     headers: {
       'Content-Type': 'application/json',
@@ -25,9 +33,12 @@ async function request(endpoint, options = {}) {
     },
     ...options,
   };
+  // Don't leak internal options into fetch
+  delete config.accessToken;
+  delete config._retried;
 
   const res = await fetch(`${API_BASE}${endpoint}`, config);
-  const canRefresh = !['/auth/login', '/auth/register', '/auth/refresh'].includes(endpoint);
+  const canRefresh = !NO_REFRESH_ENDPOINTS.includes(endpoint);
   if (res.status === 401 && canRefresh && !options._retried) {
     const refreshToken = localStorage.getItem('refreshToken');
     if (refreshToken) {
@@ -59,17 +70,72 @@ async function request(endpoint, options = {}) {
   }
 
   const data = await readJsonResponse(res);
-  
+
   if (!res.ok) {
     throw new Error(data.error || 'Something went wrong');
   }
   return data;
 }
 
+/** Build the URL users land on after clicking the reset link in email. */
+export function getPasswordResetRedirectUrl() {
+  const origin = window.location.origin;
+  const base = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+  // HashRouter path
+  return `${origin}${base}/#/reset-password`;
+}
+
+/**
+ * Parse recovery tokens from the URL after Supabase redirects the user.
+ * Supports hash fragments and query strings (HashRouter-friendly).
+ */
+export function extractRecoveryTokensFromUrl() {
+  const href = window.location.href;
+  const hash = window.location.hash || '';
+  const search = window.location.search || '';
+
+  const tryParse = (raw) => {
+    if (!raw || !raw.includes('access_token')) return null;
+    // Strip leading # or ? and any path prefix before the params
+    let qs = raw.replace(/^[#?]/, '');
+    const tokenIdx = qs.indexOf('access_token=');
+    if (tokenIdx > 0) qs = qs.slice(tokenIdx);
+    const params = new URLSearchParams(qs);
+    const accessToken = params.get('access_token');
+    const type = params.get('type');
+    if (accessToken && (type === 'recovery' || type === 'magiclink' || !type)) {
+      return {
+        accessToken,
+        refreshToken: params.get('refresh_token') || '',
+        type: type || 'recovery',
+      };
+    }
+    return null;
+  };
+
+  return (
+    tryParse(hash)
+    || tryParse(search)
+    || tryParse(href.includes('#') ? href.split('#').slice(1).join('#') : '')
+    || null
+  );
+}
+
 export const api = {
   register: (body) => request('/auth/register', { method: 'POST', body: JSON.stringify(body) }),
   login: (body) => request('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
   getMe: () => request('/auth/me'),
+  forgotPassword: (email, redirectTo) =>
+    request('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email, redirectTo }),
+    }),
+  resetPassword: (password, accessToken) =>
+    request('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+      accessToken,
+    }),
   searchDonors: (params = {}) => {
     const query = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => { if (v) query.set(k, v); });

@@ -17,6 +17,8 @@ const bloodGroups = new Set(['A_POS', 'A_NEG', 'B_POS', 'B_NEG', 'AB_POS', 'AB_N
 const roles = new Set(['DONOR', 'RECIPIENT'])
 const urgencies = new Set(['CRITICAL', 'HIGH', 'NORMAL'])
 
+const DEFAULT_RESET_REDIRECT = 'https://aayushbodh726-sketch.github.io/Dev-of-blood-donation/#/reset-password'
+
 function mapUser(user: Record<string, any>) {
   return {
     id: user.auth_user_id,
@@ -124,6 +126,22 @@ function requestData(body: Record<string, any>, recipientId: string) {
   }
 }
 
+function isSafeRedirect(url: string) {
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false
+    const host = parsed.hostname
+    return (
+      host === 'localhost'
+      || host === '127.0.0.1'
+      || host.endsWith('.github.io')
+      || host.endsWith('.supabase.co')
+    )
+  } catch {
+    return false
+  }
+}
+
 async function handle(req: Request, admin: any) {
   const url = new URL(req.url)
   const marker = '/lifeflow-api'
@@ -198,6 +216,69 @@ async function handle(req: Request, admin: any) {
     const { data: profile, error: profileError } = await admin.from('app_users').select('*').eq('auth_user_id', data.user.id).maybeSingle()
     if (profileError || !profile) return failure('Invalid session.', 401)
     return json({ success: true, data: { token: data.session.access_token, refreshToken: data.session.refresh_token, user: mapUser(profile) } })
+  }
+
+  // Request a password-reset email (always returns the same success message for privacy)
+  if (method === 'POST' && path === '/auth/forgot-password') {
+    const body = await req.json().catch(() => ({}))
+    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return failure('Please enter a valid email address', 400)
+    }
+
+    let redirectTo = typeof body.redirectTo === 'string' ? body.redirectTo.trim() : DEFAULT_RESET_REDIRECT
+    if (!isSafeRedirect(redirectTo)) redirectTo = DEFAULT_RESET_REDIRECT
+
+    // Only attempt send when the email is registered; still return a generic success response.
+    const { data: profile } = await admin.from('app_users').select('auth_user_id').eq('email', email).maybeSingle()
+    if (profile) {
+      const { error } = await admin.auth.resetPasswordForEmail(email, { redirectTo })
+      if (error) {
+        console.error('resetPasswordForEmail failed', error)
+        // Fall back to generating a recovery link (email may still be sent by Supabase templates)
+        const { error: linkError } = await admin.auth.admin.generateLink({
+          type: 'recovery',
+          email,
+          options: { redirectTo },
+        })
+        if (linkError) {
+          console.error('generateLink recovery failed', linkError)
+          return failure('Could not send reset email. Please try again later.', 500)
+        }
+      }
+    }
+
+    return json({
+      success: true,
+      message: 'If an account exists for that email, a password reset link has been sent. Please check your inbox and spam folder.',
+    })
+  }
+
+  // Set a new password using the recovery access token from the email link
+  if (method === 'POST' && path === '/auth/reset-password') {
+    const body = await req.json().catch(() => ({}))
+    const password = typeof body.password === 'string' ? body.password : ''
+    if (password.length < 6) return failure('Password must be at least 6 characters', 400)
+
+    const authorization = req.headers.get('authorization') || ''
+    const accessToken = authorization.startsWith('Bearer ') ? authorization.slice(7) : (typeof body.accessToken === 'string' ? body.accessToken : '')
+    if (!accessToken) return failure('Invalid or expired reset link. Please request a new one.', 401)
+
+    const { data: userData, error: userError } = await admin.auth.getUser(accessToken)
+    if (userError || !userData.user) {
+      return failure('Invalid or expired reset link. Please request a new one.', 401)
+    }
+
+    const { error: updateError } = await admin.auth.admin.updateUserById(userData.user.id, { password })
+    if (updateError) {
+      console.error('Password update failed', updateError)
+      return failure(updateError.message || 'Could not update password', 400)
+    }
+
+    return json({
+      success: true,
+      message: 'Your password has been updated. You can now sign in with your new password.',
+    })
   }
 
   if (method === 'GET' && path === '/donors/search') {

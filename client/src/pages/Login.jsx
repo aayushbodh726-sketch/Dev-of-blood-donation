@@ -35,7 +35,6 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center py-20 px-4">
       <div className="max-w-md w-full">
-        {/* Brand Header */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2 mb-2">
             <div className="w-10 h-10 rounded-xl bg-crimson-700 flex items-center justify-center text-white shadow-md">
@@ -49,7 +48,6 @@ export default function Login() {
           <p className="text-slate-600 text-sm mt-1">Sign in to manage requests and donations</p>
         </div>
 
-        {/* Login Card */}
         <div className="card p-8 shadow-xl border border-slate-100">
           {error && (
             <div className="bg-red-50 text-red-700 p-4 rounded-xl text-sm font-medium border border-red-200 mb-6">
@@ -75,7 +73,15 @@ export default function Login() {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Password</label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-sm font-semibold text-slate-700">Password</label>
+                <Link
+                  to="/forgot-password"
+                  className="text-xs font-semibold text-crimson-700 hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <div className="relative">
                 <Lock className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
                 <input
