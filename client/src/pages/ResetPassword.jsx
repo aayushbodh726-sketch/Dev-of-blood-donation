@@ -47,7 +47,8 @@ export default function ResetPassword() {
       return;
     }
     if (password.length < 6) {
-      setError('Password must be at least 6 characters');\n      return;
+      setError('Password must be at least 6 characters');
+      return;
     }
     if (password !== confirm) {
       setError('Passwords do not match');
