@@ -1,3 +1,5 @@
+import { supabase } from './supabase';
+
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
@@ -33,7 +35,6 @@ async function request(endpoint, options = {}) {
     },
     ...options,
   };
-  // Don't leak internal options into fetch
   delete config.accessToken;
   delete config._retried;
 
@@ -81,7 +82,6 @@ async function request(endpoint, options = {}) {
 export function getPasswordResetRedirectUrl() {
   const origin = window.location.origin;
   const base = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
-  // HashRouter path
   return `${origin}${base}/#/reset-password`;
 }
 
@@ -96,7 +96,6 @@ export function extractRecoveryTokensFromUrl() {
 
   const tryParse = (raw) => {
     if (!raw || !raw.includes('access_token')) return null;
-    // Strip leading # or ? and any path prefix before the params
     let qs = raw.replace(/^[#?]/, '');
     const tokenIdx = qs.indexOf('access_token=');
     if (tokenIdx > 0) qs = qs.slice(tokenIdx);
@@ -121,21 +120,87 @@ export function extractRecoveryTokensFromUrl() {
   );
 }
 
+/**
+ * Request a password-reset email via Supabase Auth (works without Edge Function deploy).
+ */
+async function forgotPassword(email, redirectTo) {
+  const target = redirectTo || getPasswordResetRedirectUrl();
+  if (supabase) {
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+      redirectTo: target,
+    });
+    if (error) {
+      const msg = (error.message || '').toLowerCase();
+      if (msg.includes('rate') || msg.includes('limit')) {
+        throw new Error('Too many reset attempts. Please wait a few minutes and try again.');
+      }
+      console.warn('resetPasswordForEmail:', error.message);
+    }
+    return {
+      success: true,
+      message:
+        'If an account exists for that email, a password reset link has been sent. Please check your inbox and spam folder.',
+    };
+  }
+
+  return request('/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email, redirectTo: target }),
+  });
+}
+
+/**
+ * Set a new password using the recovery access token from the email link.
+ */
+async function resetPassword(password, accessToken, refreshToken = '') {
+  if (password.length < 6) {
+    throw new Error('Password must be at least 6 characters');
+  }
+  if (!accessToken) {
+    throw new Error('Invalid or expired reset link. Please request a new one.');
+  }
+
+  if (supabase) {
+    const sessionPayload = {
+      access_token: accessToken,
+      refresh_token: refreshToken || accessToken,
+    };
+    const { error: sessionError } = await supabase.auth.setSession(sessionPayload);
+    if (sessionError) {
+      try {
+        return await request('/auth/reset-password', {
+          method: 'POST',
+          body: JSON.stringify({ password }),
+          accessToken,
+        });
+      } catch {
+        throw new Error('Invalid or expired reset link. Please request a new one.');
+      }
+    }
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) {
+      throw new Error(error.message || 'Could not update password');
+    }
+    await supabase.auth.signOut();
+    return {
+      success: true,
+      message: 'Your password has been updated. You can now sign in with your new password.',
+    };
+  }
+
+  return request('/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ password }),
+    accessToken,
+  });
+}
+
 export const api = {
   register: (body) => request('/auth/register', { method: 'POST', body: JSON.stringify(body) }),
   login: (body) => request('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
   getMe: () => request('/auth/me'),
-  forgotPassword: (email, redirectTo) =>
-    request('/auth/forgot-password', {
-      method: 'POST',
-      body: JSON.stringify({ email, redirectTo }),
-    }),
-  resetPassword: (password, accessToken) =>
-    request('/auth/reset-password', {
-      method: 'POST',
-      body: JSON.stringify({ password }),
-      accessToken,
-    }),
+  forgotPassword,
+  resetPassword,
   searchDonors: (params = {}) => {
     const query = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => { if (v) query.set(k, v); });

@@ -4,6 +4,7 @@ import { Droplet, Lock, Eye, EyeOff, CheckCircle2, AlertCircle } from 'lucide-re
 import { api, extractRecoveryTokensFromUrl } from '../utils/api';
 
 const RECOVERY_TOKEN_KEY = 'lifeflow_recovery_token';
+const RECOVERY_REFRESH_KEY = 'lifeflow_recovery_refresh';
 
 export default function ResetPassword() {
   const navigate = useNavigate();
@@ -14,13 +15,18 @@ export default function ResetPassword() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [accessToken, setAccessToken] = useState('');
+  const [refreshToken, setRefreshToken] = useState('');
   const [linkInvalid, setLinkInvalid] = useState(false);
 
   useEffect(() => {
     const fromUrl = extractRecoveryTokensFromUrl();
     if (fromUrl?.accessToken) {
       sessionStorage.setItem(RECOVERY_TOKEN_KEY, fromUrl.accessToken);
+      if (fromUrl.refreshToken) {
+        sessionStorage.setItem(RECOVERY_REFRESH_KEY, fromUrl.refreshToken);
+      }
       setAccessToken(fromUrl.accessToken);
+      setRefreshToken(fromUrl.refreshToken || '');
       if (window.location.hash.includes('access_token') || window.location.search.includes('access_token')) {
         window.history.replaceState(
           null,
@@ -34,6 +40,7 @@ export default function ResetPassword() {
     const stored = sessionStorage.getItem(RECOVERY_TOKEN_KEY);
     if (stored) {
       setAccessToken(stored);
+      setRefreshToken(sessionStorage.getItem(RECOVERY_REFRESH_KEY) || '');
       return;
     }
 
@@ -58,8 +65,9 @@ export default function ResetPassword() {
     setSubmitting(true);
     setError('');
     try {
-      await api.resetPassword(password, accessToken);
+      await api.resetPassword(password, accessToken, refreshToken);
       sessionStorage.removeItem(RECOVERY_TOKEN_KEY);
+      sessionStorage.removeItem(RECOVERY_REFRESH_KEY);
       setSuccess(true);
       setTimeout(() => navigate('/login'), 2500);
     } catch (err) {
