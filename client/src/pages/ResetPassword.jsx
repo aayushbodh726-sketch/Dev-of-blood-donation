@@ -17,34 +17,49 @@ export default function ResetPassword() {
   const [accessToken, setAccessToken] = useState('');
   const [refreshToken, setRefreshToken] = useState('');
   const [linkInvalid, setLinkInvalid] = useState(false);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const fromUrl = extractRecoveryTokensFromUrl();
-    if (fromUrl?.accessToken) {
-      sessionStorage.setItem(RECOVERY_TOKEN_KEY, fromUrl.accessToken);
-      if (fromUrl.refreshToken) {
-        sessionStorage.setItem(RECOVERY_REFRESH_KEY, fromUrl.refreshToken);
+    let token = '';
+    let refresh = '';
+
+    try {
+      const fromUrl = extractRecoveryTokensFromUrl();
+      if (fromUrl?.accessToken) {
+        token = fromUrl.accessToken;
+        refresh = fromUrl.refreshToken || '';
+        sessionStorage.setItem(RECOVERY_TOKEN_KEY, token);
+        if (refresh) sessionStorage.setItem(RECOVERY_REFRESH_KEY, refresh);
+        // Clean token fragment from address bar
+        if (
+          window.location.hash.includes('access_token') ||
+          window.location.search.includes('access_token')
+        ) {
+          const path = window.location.pathname.endsWith('/')
+            ? window.location.pathname
+            : `${window.location.pathname}/`;
+          window.history.replaceState(
+            null,
+            '',
+            `${window.location.origin}${path}#/reset-password`
+          );
+        }
+      } else {
+        token = sessionStorage.getItem(RECOVERY_TOKEN_KEY) || '';
+        refresh = sessionStorage.getItem(RECOVERY_REFRESH_KEY) || '';
       }
-      setAccessToken(fromUrl.accessToken);
-      setRefreshToken(fromUrl.refreshToken || '');
-      if (window.location.hash.includes('access_token') || window.location.search.includes('access_token')) {
-        window.history.replaceState(
-          null,
-          '',
-          `${window.location.pathname}${window.location.search.split('&access_token')[0]}#/reset-password`
-        );
-      }
-      return;
+    } catch (err) {
+      console.error(err);
     }
 
-    const stored = sessionStorage.getItem(RECOVERY_TOKEN_KEY);
-    if (stored) {
-      setAccessToken(stored);
-      setRefreshToken(sessionStorage.getItem(RECOVERY_REFRESH_KEY) || '');
-      return;
+    if (token) {
+      setAccessToken(token);
+      setRefreshToken(refresh);
+      setLinkInvalid(false);
+    } else {
+      setLinkInvalid(true);
     }
-
-    setLinkInvalid(true);
+    setReady(true);
   }, []);
 
   const handleSubmit = async (e) => {
@@ -77,6 +92,14 @@ export default function ResetPassword() {
     }
   };
 
+  if (!ready) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-crimson-200 border-t-crimson-700" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center py-20 px-4">
       <div className="max-w-md w-full">
@@ -101,9 +124,13 @@ export default function ResetPassword() {
               </div>
               <h3 className="text-lg font-bold text-slate-900">Link invalid or expired</h3>
               <p className="text-sm text-slate-600">
-                This password reset link is missing, invalid, or has already been used. Request a new one to continue.
+                This password reset link is missing, invalid, or has already been used. Request a new
+                one to continue.
               </p>
-              <Link to="/forgot-password" className="btn-primary w-full py-3 text-sm inline-block text-center">
+              <Link
+                to="/forgot-password"
+                className="btn-primary w-full py-3 text-sm inline-block text-center"
+              >
                 Request new reset link
               </Link>
               <Link to="/login" className="block text-sm font-semibold text-crimson-700 hover:underline">
@@ -137,7 +164,9 @@ export default function ResetPassword() {
 
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">New Password</label>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                    New Password
+                  </label>
                   <div className="relative">
                     <Lock className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
                     <input
@@ -162,7 +191,9 @@ export default function ResetPassword() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Confirm Password</label>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                    Confirm Password
+                  </label>
                   <div className="relative">
                     <Lock className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
                     <input

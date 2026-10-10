@@ -8,51 +8,67 @@ import './index.css'
 /**
  * Supabase recovery links land as:
  *   https://site/#access_token=...&type=recovery&refresh_token=...
- * which conflicts with HashRouter paths (#/reset-password).
- * Capture tokens into sessionStorage, then send the user to #/reset-password.
+ * or sometimes with query params. That conflicts with HashRouter (#/reset-password).
+ *
+ * Capture tokens into sessionStorage, clean the URL to #/reset-password,
+ * then always mount the React app (never leave a blank page).
  */
-function captureAuthTokensFromHash() {
-  const hash = window.location.hash || ''
-  if (!hash.includes('access_token=')) return false
-
-  // Strip leading # and any route prefix before the query-like params
-  let qs = hash.replace(/^#/, '')
-  const idx = qs.indexOf('access_token=')
-  if (idx > 0) qs = qs.slice(idx)
-
-  const params = new URLSearchParams(qs)
-  const accessToken = params.get('access_token')
-  const refreshToken = params.get('refresh_token') || ''
-  const type = params.get('type')
-
-  if (!accessToken) return false
-  if (type && type !== 'recovery' && type !== 'magiclink') return false
-
+function captureAuthTokensFromUrl() {
   try {
-    sessionStorage.setItem('lifeflow_recovery_token', accessToken)
-    if (refreshToken) {
-      sessionStorage.setItem('lifeflow_recovery_refresh', refreshToken)
+    const hash = window.location.hash || ''
+    const search = window.location.search || ''
+
+    const tryParse = (raw) => {
+      if (!raw || !raw.includes('access_token=')) return null
+      let qs = raw.replace(/^[#?]/, '')
+      const idx = qs.indexOf('access_token=')
+      if (idx > 0) qs = qs.slice(idx)
+      const params = new URLSearchParams(qs)
+      const accessToken = params.get('access_token')
+      if (!accessToken) return null
+      const type = params.get('type')
+      // Accept recovery links; also accept if type is missing (some clients omit it)
+      if (type && type !== 'recovery' && type !== 'magiclink') return null
+      return {
+        accessToken,
+        refreshToken: params.get('refresh_token') || '',
+      }
     }
-  } catch {
-    // sessionStorage may be blocked; still try to route with tokens in a temporary hash
+
+    const tokens =
+      tryParse(hash) ||
+      tryParse(search) ||
+      tryParse(hash.includes('#') ? hash.split('#').slice(1).join('#') : '')
+
+    if (!tokens) return
+
+    sessionStorage.setItem('lifeflow_recovery_token', tokens.accessToken)
+    if (tokens.refreshToken) {
+      sessionStorage.setItem('lifeflow_recovery_refresh', tokens.refreshToken)
+    }
+
+    // Clean the URL without a full navigation (avoids blank white page)
+    const path = window.location.pathname.endsWith('/')
+      ? window.location.pathname
+      : `${window.location.pathname}/`
+    window.history.replaceState(
+      null,
+      '',
+      `${window.location.origin}${path}#/reset-password`
+    )
+  } catch (err) {
+    console.error('Failed to capture recovery tokens', err)
   }
-
-  // Navigate to the reset-password route (HashRouter) without keeping raw tokens in the URL
-  const path = window.location.pathname.endsWith('/')
-    ? window.location.pathname
-    : `${window.location.pathname}/`
-  window.location.replace(`${window.location.origin}${path}#/reset-password`)
-  return true
 }
 
-if (!captureAuthTokensFromHash()) {
-  ReactDOM.createRoot(document.getElementById('root')).render(
-    <React.StrictMode>
-      <HashRouter>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
-      </HashRouter>
-    </React.StrictMode>
-  )
-}
+captureAuthTokensFromUrl()
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <HashRouter>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </HashRouter>
+  </React.StrictMode>
+)
