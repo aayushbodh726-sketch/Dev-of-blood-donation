@@ -1,40 +1,12 @@
-name: Deploy LifeFlow to GitHub Pages
-
-on:
-  push:
-    branches: [main]
-  workflow_dispatch:
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: github-pages
-  cancel-in-progress: true
-
-env:
-  API_BASE_URL: ${{ vars.API_BASE_URL || 'https://ambpqrztnvgthgrmqbse.supabase.co/functions/v1/lifeflow-api' }}
-  SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_uXobz_BlIXYQECoftPsqCA_TUC2H82J' }}
-  SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://ambpqrztnvgthgrmqbse.supabase.co' }}
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
+- name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'npm'
-          # lockfile is at the repo root
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: client/package-lock.json
 
-      - name: Install and build
+      - name: Install and build client
+        working-directory: client
         env:
           VITE_API_BASE_URL: ${{ env.API_BASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ env.SUPABASE_PUBLISHABLE_KEY }}
@@ -43,7 +15,6 @@ jobs:
         run: |
           npm install
           npm run build
-          # SPA fallback
           cp dist/index.html dist/404.html
           test -f dist/index.html
           test -d dist/assets
@@ -56,15 +27,4 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist   # was client/dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          path: client/dist
