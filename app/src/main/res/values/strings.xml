@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">LifeFlow</string>
+    <string name="tagline">Save lives with every drop</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_donors">Donors</string>
+    <string name="nav_requests">Requests</string>
+    <string name="nav_donate">Donate</string>
+    <string name="nav_compatibility">Compatibility</string>
+</resources>

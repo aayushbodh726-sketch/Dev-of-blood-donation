@@ -1,54 +1,21 @@
-# Dev-of-bloody-Mary
+# LifeFlow - Blood Donation Platform
 
-LifeFlow is a blood donation app with a React client and an Express/Prisma API.
+LifeFlow is a modern blood donation platform connecting voluntary blood donors directly with patients and healthcare facilities in urgent need of blood.
 
-## Project folders
+## Features
 
-- [Client application](./client/) — React UI, pages, and API client.
-- [Server API](./server/) — Express routes, authentication, and Prisma database.
+- **Dashboard & Real-time Stats**: Track total registered donors, lives saved, active requests, and units donated.
+- **Find Donors**: Search donors by name, city, or state. Filter by blood group (A+, A-, B+, B-, AB+, AB-, O+, O-) and availability. Instant Call and SMS contact actions.
+- **Urgent Blood Appeals**: Browse open blood requests with urgency indicators (Critical, Urgent, Normal). One-tap "I Can Donate" fulfillment.
+- **Blood Request Creation**: Quick form for hospitals and families to broadcast urgent blood requirements to nearby matching donors.
+- **Donor Registration & Health Checklist**: Easy registration with built-in eligibility screening (age, weight, donation interval).
+- **Interactive Compatibility Matrix**: Visual blood match guide showing red blood cell donor and recipient compatibility rules.
 
-The client and server are connected through the `/api` routes. During local
-development, Vite proxies those requests from the client to the server on port
-5000.
+## Android Architecture
 
-## Run locally
+The Android application is built using modern Jetpack Compose and Material 3 design:
 
-1. Start the API in one terminal:
-
-   ```sh
-   cd server
-   npm install
-   ```
-
-   Create `server/.env` with `DATABASE_URL="file:./dev.db"` and a long random
-   `JWT_SECRET`, then run `npx prisma db push` and `npm run dev`.
-
-2. Start the client in another terminal:
-
-   ```sh
-   cd client
-   npm install
-   npm run dev
-   ```
-
-The client is available at `http://localhost:3000`; Vite forwards `/api` to the
-API at `http://localhost:5000`.
-
-Keep both processes running while using the app. Registration, login, donor
-search, availability, blood requests, pledges, and live stats use the API and
-database; the static client by itself cannot provide those features.
-
-## Deploy
-
-GitHub Actions builds `client/` and publishes `client/dist` to GitHub Pages on
-every push to `main`. The workflow is connected to the LifeFlow Edge Function
-and passes its API URL and browser-safe Supabase publishable key to the client
-build. Optional repository Actions variables named `API_BASE_URL` and
-`SUPABASE_PUBLISHABLE_KEY` override the defaults in the workflow.
-
-The hosted API and Postgres database are in the `lifeflow-blood-donation`
-Supabase project (India region). Its Edge Function implements registration,
-login, donor search and availability, blood requests, pledges, and live stats.
-Database tables have row-level security enabled and are accessible only through
-the server-side function. The local Express API remains available for
-development using the SQLite setup above.
+- **Kotlin DSL & Jetpack Compose**: 100% declarative UI with edge-to-edge support and dynamic theming.
+- **Clean Architecture & Unidirectional Data Flow**: Repository layer (`LifeFlowRepository`) backed by `StateFlow` providing real-time reactivity.
+- **Material 3 Components**: Fluid navigation, accessible touch targets, and automated test tags (`Modifier.testTag(...)`) across all interactive flows.
+- **Custom Adaptive Launcher Icon**: Themed vector silhouette with medical cross droplet asset.
