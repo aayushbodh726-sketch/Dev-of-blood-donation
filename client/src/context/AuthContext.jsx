@@ -9,24 +9,42 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isCancelled = false;
+
     async function loadUser() {
-      if (token) {
+      const storedToken = localStorage.getItem('token');
+      if (storedToken) {
         try {
           const res = await api.getMe();
-          if (res.success) {
-            setUser(res.data);
-          } else {
-            logout();
+          if (!isCancelled) {
+            if (res.success) {
+              setUser(res.data);
+            } else {
+              logout();
+            }
           }
         } catch (err) {
           console.error('Failed to load user session:', err);
-          logout();
+          if (!isCancelled) {
+            logout();
+          }
+        }
+      } else {
+        if (!isCancelled) {
+          setUser(null);
         }
       }
-      setLoading(false);
+      if (!isCancelled) {
+        setLoading(false);
+      }
     }
+
     loadUser();
-  }, [token]);
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const syncRefreshedToken = () => setToken(localStorage.getItem('token'));
@@ -41,6 +59,7 @@ export function AuthProvider({ children }) {
       if (res.data.refreshToken) localStorage.setItem('refreshToken', res.data.refreshToken);
       setToken(res.data.token);
       setUser(res.data.user);
+      setLoading(false);
       return res.data.user;
     }
     throw new Error(res.error || 'Login failed');
@@ -53,6 +72,7 @@ export function AuthProvider({ children }) {
       if (res.data.refreshToken) localStorage.setItem('refreshToken', res.data.refreshToken);
       setToken(res.data.token);
       setUser(res.data.user);
+      setLoading(false);
       return res.data.user;
     }
     throw new Error(res.error || 'Registration failed');
@@ -63,6 +83,8 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('refreshToken');
     setToken(null);
     setUser(null);
+    setLoading(false);
+    api.logout().catch(() => {});
   };
 
   const updateUser = (updatedUserData) => {

@@ -158,12 +158,6 @@ async function login(body) {
       throw new Error('Invalid email or password');
     }
     const me = await request('/auth/me', { accessToken: data.session.access_token });
-    // Clear supabase client session so we only use our own token storage
-    try {
-      await supabase.auth.signOut({ scope: 'local' });
-    } catch {
-      /* ignore */
-    }
     return {
       success: true,
       data: {
@@ -246,9 +240,20 @@ async function resetPassword(password, accessToken, refreshToken = '') {
   });
 }
 
+async function logout() {
+  if (supabase) {
+    try {
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 export const api = {
   register: (body) => request('/auth/register', { method: 'POST', body: JSON.stringify(body) }),
   login,
+  logout,
   getMe: () => request('/auth/me'),
   forgotPassword,
   resetPassword,
