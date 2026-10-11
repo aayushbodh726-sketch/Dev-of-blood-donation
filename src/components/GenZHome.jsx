@@ -122,22 +122,23 @@ export default function GenZHome({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext ? canvas.getContext('2d') : null;
+    if (!ctx) return;
     let animationFrameId;
 
-    let width = (canvas.width = canvas.offsetWidth);
-    let height = (canvas.height = canvas.offsetHeight);
+    let width = (canvas.width = canvas.offsetWidth || (typeof window !== 'undefined' ? window.innerWidth : 800));
+    let height = (canvas.height = canvas.offsetHeight || 600);
 
     const handleResize = () => {
       if (!canvas) return;
-      width = canvas.width = canvas.offsetWidth;
-      height = canvas.height = canvas.offsetHeight;
+      width = canvas.width = canvas.offsetWidth || (typeof window !== 'undefined' ? window.innerWidth : 800);
+      height = canvas.height = canvas.offsetHeight || 600;
     };
     window.addEventListener('resize', handleResize);
 
     const particles = Array.from({ length: 32 }, () => ({
-      x: Math.random() * width,
-      y: Math.random() * height,
+      x: Math.random() * (width || 800),
+      y: Math.random() * (height || 600),
       radius: Math.random() * 12 + 4,
       vx: (Math.random() - 0.5) * 0.7,
       vy: (Math.random() - 0.5) * 0.7,
@@ -146,6 +147,7 @@ export default function GenZHome({
     }));
 
     const render = () => {
+      if (!ctx) return;
       ctx.clearRect(0, 0, width, height);
 
       particles.forEach((p) => {

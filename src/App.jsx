@@ -3,6 +3,7 @@ import {
   Droplet,
   Heart,
   Users,
+  User,
   AlertTriangle,
   Search,
   Plus,
