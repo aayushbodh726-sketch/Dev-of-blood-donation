@@ -15,7 +15,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Override via repo Settings → Secrets and variables → Actions → Variables
   API_BASE_URL: ${{ vars.API_BASE_URL || 'https://ambpqrztnvgthgrmqbse.supabase.co/functions/v1/lifeflow-api' }}
   SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_uXobz_BlIXYQECoftPsqCA_TUC2H82J' }}
   SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://ambpqrztnvgthgrmqbse.supabase.co' }}
@@ -32,22 +31,20 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
-          cache-dependency-path: client/package-lock.json
+          # lockfile is at the repo root
+          cache-dependency-path: package-lock.json
 
-      - name: Install and build client
-        working-directory: client
+      - name: Install and build
         env:
           VITE_API_BASE_URL: ${{ env.API_BASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ env.SUPABASE_PUBLISHABLE_KEY }}
           VITE_SUPABASE_URL: ${{ env.SUPABASE_URL }}
-          # Must match the GitHub Pages project URL path
           VITE_BASE_PATH: /Dev-of-blood-donation/
         run: |
           npm install
           npm run build
-          # SPA fallback for direct links (HashRouter is primary, but keep this)
+          # SPA fallback
           cp dist/index.html dist/404.html
-          # Sanity check: never deploy without the app entry
           test -f dist/index.html
           test -d dist/assets
           echo "Built files:"
@@ -59,7 +56,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: client/dist
+          path: dist   # was client/dist
 
   deploy:
     needs: build
