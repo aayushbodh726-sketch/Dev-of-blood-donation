@@ -1,4 +1,33 @@
-- name: Setup Node.js
+name: Deploy LifeFlow to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+env:
+  # Override via repo Settings → Secrets and variables → Actions → Variables
+  API_BASE_URL: ${{ vars.API_BASE_URL || 'https://ambpqrztnvgthgrmqbse.supabase.co/functions/v1/lifeflow-api' }}
+  SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_uXobz_BlIXYQECoftPsqCA_TUC2H82J' }}
+  SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://ambpqrztnvgthgrmqbse.supabase.co' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -11,10 +40,12 @@
           VITE_API_BASE_URL: ${{ env.API_BASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ env.SUPABASE_PUBLISHABLE_KEY }}
           VITE_SUPABASE_URL: ${{ env.SUPABASE_URL }}
+          # Must match the GitHub Pages project URL path
           VITE_BASE_PATH: /Dev-of-blood-donation/
         run: |
-          npm install
+          npm ci
           npm run build
+          # SPA fallback for direct links
           cp dist/index.html dist/404.html
           test -f dist/index.html
           test -d dist/assets
@@ -28,3 +59,14 @@
         uses: actions/upload-pages-artifact@v3
         with:
           path: client/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
