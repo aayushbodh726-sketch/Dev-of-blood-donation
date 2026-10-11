@@ -1,33 +1,15 @@
-# Node dependencies and build artifacts
 node_modules/
 dist/
-dist-ssr/
-*.local
+coverage/
 
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Environment
 .env
-.env.local
+.env.*
+!.env.example
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+*.db
+*.sqlite
+*.sqlite3
+
 .DS_Store
-
-# Android & Gradle artifacts
-.gradle/
-build/
-app/build/
-*.hprof
-*.keystore
-!debug.keystore
+._*
+npm-debug.log*

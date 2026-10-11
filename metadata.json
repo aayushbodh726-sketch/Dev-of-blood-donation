@@ -1,6 +1,0 @@
-{
-  "name": "LifeFlow",
-  "description": "LifeFlow connects blood donors with patients in urgent need. Search donors by blood type and city, create blood requests, and track donation statistics.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
